@@ -1,8 +1,9 @@
 # Wiki Chat
 
-Personal llm_wiki knowledge base with chat. Upload documents (pdf/txt/md) from any
-device on the LAN; a worker compiles them into a persistent Markdown wiki via an
-`opencode serve` backend; chat answers stream back with citations and reasoning.
+Shared llm_wiki knowledge base with multi-user chat. One admin curates sources
+(PDF, Markdown, text) from any device on the LAN; a worker compiles them into a
+persistent Markdown wiki via an `opencode serve` backend; everyone chats against
+it with streaming answers, citations and reasoning.
 
 ## Run
 
@@ -11,10 +12,15 @@ Requires `opencode serve` reachable (default `http://127.0.0.1:4096`, override w
 
 ```sh
 npm install
-npm run dev -- --port 5173 --host 0.0.0.0
+ADMIN_PASSWORD=your-secret npm run dev -- --port 5173 --host 0.0.0.0
 ```
 
 Open `http://<host>:5174/chat`, manage sources at `/admin`.
+
+Chat and wiki reading are public. When `ADMIN_PASSWORD` is set, `/admin` and the
+curating APIs (source listing/deletes, jobs, settings, page deletes) require the
+password; any chat user may still contribute sources via upload. Without it the
+admin section stays open (local-dev only, never for shared deployments).
 
 ## Tests
 

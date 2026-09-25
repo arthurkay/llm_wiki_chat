@@ -2,7 +2,12 @@
 
 ## 1. What this software is
 
-A single-user, local-first **llm_wiki** knowledge base with chat — not RAG.
+A multi-user, local-first **llm_wiki** knowledge base with chat — not RAG.
+One shared wiki and one shared `opencode serve` backend; many browsers chat
+against it. A single admin curates the wiki. Chat + wiki reading are public;
+everything that mutates the knowledge base or reveals admin state requires the
+admin password (`ADMIN_PASSWORD` env var, see §6).
+
 Raw documents are **compiled once** into a persistent, interlinked Markdown wiki;
 chat answers are grounded in that wiki, never re-derived from raw chunks.
 
@@ -32,6 +37,22 @@ Core flows:
   no Redis, no ORMs. The old Go backend is deleted and must not return.
 - **Upload policy** (`src/lib/uploads.ts`, single source of truth): max **20MB**,
   extensions **.pdf, .md, .markdown, .txt, .text** only. Server enforces; UI pre-checks.
+
+## 6. Multi-user model and admin auth
+
+- Chat history is per-browser: the client registers the session ids it started
+  (`wiki.sessions` in localStorage) and `/api/chat` only returns those — one
+  browser can never list another's chats.
+- Admin protection is on when `ADMIN_PASSWORD` is set (required for any shared
+  deployment; unset means open, local-dev only).
+- Auth is a stateless HMAC cookie (`src/lib/server/wiki/adminauth.ts`, `src/hooks.server.ts`):
+  password is timing-safe-compared, cookie is `httpOnly` + `SameSite=lax`.
+- Gated (401 without cookie): `GET /api/documents`, `/api/documents/:id`,
+  `/api/jobs*`, `/api/settings*`, `DELETE /api/wiki/pages/*`.
+  Always public: `/api/admin/*`, `/api/chat*`, `POST /api/documents` (any chat
+  user may contribute sources), `GET /api/wiki/search`, `GET /api/wiki/pages*`.
+  The `/admin` page renders always and shows a lock screen when gated.
+- Never log or return the password. Never commit it. Cookie lifetime is 30 days.
 
 ## 3. Repo layout
 

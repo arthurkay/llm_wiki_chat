@@ -16,7 +16,7 @@
 	import Markdown from '$lib/components/Markdown.svelte';
 	import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '$lib/uploads.js';
 	import { Dialog } from 'bits-ui';
-	import { Upload, RefreshCw, Search, Loader2, TriangleAlert, ArrowLeft, Trash2, Save, Eye, X } from 'lucide-svelte';
+	import { Upload, RefreshCw, Search, Loader2, TriangleAlert, ArrowLeft, Trash2, Save, Eye, X, Lock, LogOut } from 'lucide-svelte';
 
 	let sources = $state<WikiSource[]>([]);
 	let jobs = $state<IngestJobRow[]>([]);
@@ -32,6 +32,9 @@
 	let modelOpen = $state(false);
 	let viewing = $state<{ path: string; title: string; kind: string; body: string; sources: string; updated_at: string } | null>(null);
 	let viewerOpen = $state(false);
+	let gate = $state<'checking' | 'open' | 'locked'>('checking');
+	let password = $state('');
+	let loggingIn = $state(false);
 
 	const modelMatches = $derived.by(() => {
 		const q = (settings?.chat_model ?? '').trim().toLowerCase();
@@ -71,11 +74,59 @@
 	}
 
 	onMount(() => {
-		refresh();
-		loadSettings();
-		const t = setInterval(refresh, 4000);
+		void checkGate().then(() => {
+			if (gate !== 'locked') {
+				refresh();
+				loadSettings();
+			}
+		});
+		const t = setInterval(() => {
+			if (gate === 'open') refresh();
+		}, 4000);
 		return () => clearInterval(t);
 	});
+
+	async function checkGate() {
+		try {
+			const status = await wikiApi.adminStatus();
+			if (!status.protected) {
+				gate = 'open';
+				return;
+			}
+			const session = await wikiApi.adminAuthed();
+			gate = session.authed ? 'open' : 'locked';
+		} catch {
+			gate = 'locked';
+		}
+	}
+
+	async function login(e: Event) {
+		e.preventDefault();
+		if (!password || loggingIn) return;
+		loggingIn = true;
+		error = null;
+		try {
+			await wikiApi.adminLogin(password);
+			password = '';
+			gate = 'open';
+			refresh();
+			loadSettings();
+		} catch {
+			error = 'Wrong password.';
+		} finally {
+			loggingIn = false;
+		}
+	}
+
+	async function logout() {
+		try {
+			await wikiApi.adminLogout();
+		} catch {
+			/* ignore */
+		}
+		gate = 'locked';
+		password = '';
+	}
 
 	async function handleUpload(files: FileList | null) {
 		const file = files?.[0];
@@ -160,8 +211,32 @@
 			<h1 class="text-xl font-semibold tracking-tight md:text-2xl">Wiki Admin</h1>
 			<p class="text-muted-foreground break-words text-sm">Upload sources into <code class="break-all">data/raw</code> — the worker compiles them into <code class="break-all">data/wiki</code> via opencode.</p>
 		</div>
+		{#if gate === 'open'}
+			<Button variant="ghost" size="icon" onclick={logout} aria-label="Log out of admin">
+				<LogOut class="size-4" />
+			</Button>
+		{/if}
 		<ThemeToggle />
 	</div>
+
+	{#if gate === 'checking'}
+		<p class="text-muted-foreground flex items-center gap-2 text-sm"><Loader2 class="size-4 animate-spin" /> Checking admin access…</p>
+	{:else if gate === 'locked'}
+		<Card class="mx-auto w-full max-w-sm">
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2"><Lock class="size-4" /> Admin locked</CardTitle>
+				<CardDescription>Enter the admin password to manage the wiki.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<form onsubmit={login} class="space-y-3">
+					<Input type="password" bind:value={password} placeholder="Admin password" autocomplete="current-password" />
+					<Button type="submit" class="w-full" disabled={loggingIn || !password}>
+						{loggingIn ? 'Checking…' : 'Unlock'}
+					</Button>
+				</form>
+			</CardContent>
+		</Card>
+	{:else}
 
 	{#if error}
 		<div class="border-destructive/50 bg-destructive/10 mb-4 flex items-center gap-2 rounded-lg border p-3 text-sm">
@@ -401,4 +476,5 @@
 			</Dialog.Content>
 		</Dialog.Portal>
 	</Dialog.Root>
+	{/if}
 </div>

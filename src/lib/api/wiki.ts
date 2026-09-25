@@ -137,5 +137,14 @@ export const wikiApi = {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(patch)
-		})
+		}),
+	adminStatus: () => req<{ protected: boolean }>('/api/admin/login'),
+	adminLogin: (password: string) =>
+		req<{ ok: boolean }>('/api/admin/login', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ password })
+		}),
+	adminAuthed: () => req<{ authed: boolean }>('/api/admin/session'),
+	adminLogout: () => req<{ ok: boolean }>('/api/admin/session', { method: 'POST' }),
 };
