@@ -78,9 +78,17 @@ Run `opencode serve` under its own unit (or existing session) on the same host.
 
 - Same-machine LAN use: `HOST=0.0.0.0`, open the firewall (`sudo ufw allow 5174/tcp`),
   browse `http://<host-ip>:5174/chat`.
-- Behind nginx/caddy on another hostname: set `ORIGIN=https://<public-host>`
-  or SvelteKit rejects cross-origin POSTs (403). Proxy `proxy_pass http://127.0.0.1:5174;`
-  with websocket/SSE-friendly buffering off for `/api/chat/stream`.
+- Public domain via nginx + Let's Encrypt (as deployed for `chat.localhost.co.zm`):
+  ```sh
+  sudo apt-get install -y nginx python3-certbot-nginx
+  # /etc/nginx/sites-available/wikichat — proxy_pass http://127.0.0.1:5174 with:
+  # proxy_http_version 1.1; proxy_buffering off; proxy_read_timeout 600s;
+  # proxy_send_timeout 600s; X-Forwarded-Proto $scheme
+  sudo certbot --nginx -d <domain> --redirect
+  ```
+  Set `ORIGIN=https://<domain>` in the app unit (else SvelteKit rejects
+  cross-origin POSTs), allow ports (`ufw allow 22,80,443/tcp`), reload nginx.
+  Certbot handles renewal automatically via its systemd timer.
 
 ## 6. Backup and restore
 
