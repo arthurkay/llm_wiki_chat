@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# SvelteKit build artifacts
+.svelte-kit/
+build/
+.output/
+.vercel/
+.netlify/
+.wrangler/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# llm_wiki local state (sqlite + immutable uploads; wiki/*.md stays tracked as vault)
+data/wiki.db*
+data/raw/*
+!data/raw/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
