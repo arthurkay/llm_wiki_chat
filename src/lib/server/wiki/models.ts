@@ -1,6 +1,6 @@
 // Provider/model discovery via `opencode serve` REST API.
 // Tries v1 then v2 routes; normalizes defensively since shapes vary by version.
-const BASE = (process.env.OPENCODE_API_URL ?? 'http://127.0.0.1:4096').replace(/\/$/, '');
+import { getOpencodeBase } from './opencode.js';
 
 export interface ModelOption {
 	id: string; // "provider/model"
@@ -8,7 +8,7 @@ export interface ModelOption {
 	model: string;
 }
 
-function collectOptions(payload: unknown, out: ModelOption[]): void {
+export function collectOptions(payload: unknown, out: ModelOption[]): void {
 	if (!payload || typeof payload !== 'object') return;
 	const obj = payload as Record<string, unknown>;
 	// Candidate provider lists live under several keys depending on version
@@ -38,6 +38,7 @@ function collectOptions(payload: unknown, out: ModelOption[]): void {
 }
 
 export async function listModels(): Promise<ModelOption[]> {
+	const BASE = getOpencodeBase();
 	const paths = ['/provider', '/api/provider', '/config/providers', '/api/config/providers'];
 	const seen = new Set<string>();
 	const out: ModelOption[] = [];

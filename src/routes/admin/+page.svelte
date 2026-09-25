@@ -14,6 +14,7 @@
 	import Separator from '$lib/components/ui/separator.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '$lib/uploads.js';
 	import { Dialog } from 'bits-ui';
 	import { Upload, RefreshCw, Search, Loader2, TriangleAlert, ArrowLeft, Trash2, Save, Eye, X } from 'lucide-svelte';
 
@@ -79,6 +80,12 @@
 	async function handleUpload(files: FileList | null) {
 		const file = files?.[0];
 		if (!file) return;
+		const check = validateUploadFile(file.name, file.size);
+		if (!check.ok) {
+			if (fileInput) fileInput.value = '';
+			error = check.error;
+			return;
+		}
 		uploading = true;
 		error = null;
 		try {
@@ -252,11 +259,11 @@
 		<Card class="min-w-0">
 			<CardHeader>
 				<CardTitle>Upload source</CardTitle>
-				<CardDescription>PDF, TXT or Markdown, up to 50MB.</CardDescription>
+				<CardDescription>PDF, Markdown or text, up to 20MB.</CardDescription>
 			</CardHeader>
 			<CardContent class="min-w-0 space-y-4">
 				<div class="flex min-w-0 gap-2">
-					<Input bind:ref={fileInput} type="file" accept=".pdf,.txt,.md" onchange={(e) => handleUpload(e.currentTarget.files)} disabled={uploading} class="min-w-0 flex-1" />
+					<Input bind:ref={fileInput} type="file" accept={UPLOAD_ACCEPT_ATTR} onchange={(e) => handleUpload(e.currentTarget.files)} disabled={uploading} class="min-w-0 flex-1" />
 					<Button variant="outline" size="icon" class="shrink-0" onclick={() => wikiApi.runJobs()} aria-label="Retry worker">
 						<RefreshCw class="size-4" />
 					</Button>

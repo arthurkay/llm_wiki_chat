@@ -2,6 +2,7 @@
 	import Button from '$lib/components/ui/button.svelte';
 	import { Plus, ArrowUp, Square, Loader2 } from 'lucide-svelte';
 	import { wikiApi } from '$lib/api/wiki';
+	import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '$lib/uploads.js';
 
 	let {
 		sending = false,
@@ -44,6 +45,12 @@
 		const file = files?.[0];
 		if (picker) picker.value = '';
 		if (!file) return;
+		const check = validateUploadFile(file.name, file.size);
+		if (!check.ok) {
+			notice = check.error;
+			setTimeout(() => (notice = null), 6000);
+			return;
+		}
 		attaching = true;
 		notice = null;
 		try {
@@ -74,14 +81,14 @@
 	></textarea>
 
 	<div class="flex min-w-0 items-center gap-1.5 px-3 pt-1 pb-3">
-		<Button variant="ghost" size="icon" class="shrink-0 rounded-full" onclick={() => picker?.click()} disabled={attaching} aria-label="Attach source (pdf, txt, md)">
+		<Button variant="ghost" size="icon" class="shrink-0 rounded-full" onclick={() => picker?.click()} disabled={attaching} aria-label="Attach source (PDF, Markdown or text, 20MB max)">
 			{#if attaching}
 				<Loader2 class="size-4 animate-spin" />
 			{:else}
 				<Plus class="size-4" />
 			{/if}
 		</Button>
-		<input bind:this={picker} type="file" accept=".pdf,.txt,.md" class="hidden" onchange={(e) => onAttach(e.currentTarget.files)} />
+		<input bind:this={picker} type="file" accept={UPLOAD_ACCEPT_ATTR} class="hidden" onchange={(e) => onAttach(e.currentTarget.files)} />
 
 		<span class="flex-1"></span>
 

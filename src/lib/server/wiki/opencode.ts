@@ -2,7 +2,16 @@
 // Docs: http(s)://<host>:<port>/doc (OpenAPI 3.1).
 // Core flow: POST /session -> POST /session/:id/message -> GET /session/:id/message
 
-const BASE = (process.env.OPENCODE_API_URL ?? 'http://127.0.0.1:4096').replace(/\/$/, '');
+let BASE = (process.env.OPENCODE_API_URL ?? 'http://127.0.0.1:4096').replace(/\/$/, '');
+
+export function getOpencodeBase(): string {
+	return BASE;
+}
+
+/** Test seam: point the client at a stub server. Not for production use. */
+export function setOpencodeBase(url: string): void {
+	BASE = url.replace(/\/$/, '');
+}
 
 export interface OpenCodeSession {
 	id: string;
@@ -61,7 +70,7 @@ export async function createSession(title?: string): Promise<OpenCodeSession> {
 	throw new Error(`opencode: create session failed (${lastErr}) — is \`opencode serve\` running at ${BASE}?`);
 }
 
-function extractReplyText(payload: unknown): string {
+export function extractReplyText(payload: unknown): string {
 	// POST .../message returns { info, parts } — concatenate text parts of assistant messages
 	if (payload && typeof payload === 'object' && 'parts' in (payload as Record<string, unknown>)) {
 		const parts = (payload as { parts: Array<{ type?: string; text?: string }> }).parts;

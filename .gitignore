@@ -9,6 +9,9 @@ build/
 .netlify/
 .wrangler/
 
+# Test coverage
+coverage/
+
 # Environment
 .env
 .env.*

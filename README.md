@@ -16,6 +16,14 @@ npm run dev -- --port 5173 --host 0.0.0.0
 
 Open `http://<host>:5174/chat`, manage sources at `/admin`.
 
+## Tests
+
+```sh
+npm test              # unit + route + component tests (vitest)
+npm run test:coverage # with coverage report (~91% statements)
+npm run check         # svelte + type checks
+```
+
 ## Layout
 
 - `src/routes/` — `/chat`, `/admin`, `/api/*` (documents, jobs, wiki, chat/stream, settings)

@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { wikiApi, chatStream, type ChatSession } from '$lib/api/wiki';
 
 export interface WikiChatMessage {
@@ -90,6 +90,21 @@ function createWikiChat() {
 			}
 			return { ...s, messages };
 		});
+	}
+
+	function lastAssistant(): WikiChatMessage | undefined {
+		const messages = get(api).messages;
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === 'assistant') return messages[i];
+		}
+		return undefined;
+	}
+
+	function dropEmptyAssistant() {
+		update((s) => ({
+			...s,
+			messages: s.messages.filter((m) => !(m.role === 'assistant' && !m.content && !m.thinking))
+		}));
 	}
 
 	function patchThinking(thinking: string) {
@@ -184,6 +199,10 @@ function createWikiChat() {
 							rememberId(e.sessionId);
 						}
 						if (e.thinkingFull !== undefined) patchThinking(e.thinkingFull);
+						if (e.citations) {
+							const cur = lastAssistant();
+							if (cur) patchAssistant(cur.content, e.citations);
+						}
 						update((s) => ({
 							...s,
 							sessionId: e.sessionId ?? s.sessionId,
@@ -192,6 +211,7 @@ function createWikiChat() {
 						void api.loadSessions();
 					}
 					if (e.error) {
+						dropEmptyAssistant();
 						update((s) => ({ ...s, sending: false, error: e.error ?? 'chat failed' }));
 					}
 				});
@@ -203,10 +223,10 @@ function createWikiChat() {
 				}
 				update((s) => ({
 					...s,
-					messages: s.messages.filter((m) => !(m.role === 'assistant' && !m.content)),
 					sending: false,
 					error: err instanceof Error ? err.message : 'chat failed'
 				}));
+				dropEmptyAssistant();
 			} finally {
 				controller = null;
 			}

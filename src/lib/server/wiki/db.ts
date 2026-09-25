@@ -2,23 +2,57 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// All wiki state lives under <frontend>/data (gitignored except schema).
+// All wiki state lives under <app>/data (gitignored except schema).
 // - data/raw   : immutable uploaded sources (pdf/txt/md), LLM reads only
 // - data/wiki  : LLM-owned markdown (index.md, log.md, overview.md, sources/, entities/, concepts/, analyses/)
 // - data/wiki.db : sqlite operational store (sources, pages+FTS5, jobs, sessions/messages)
-function resolveDataDir(): string {
+function defaultDataDir(): string {
 	const fromEnv = process.env.WIKI_DATA_DIR;
 	if (fromEnv) return resolve(process.cwd(), fromEnv);
 	return resolve(process.cwd(), 'data');
 }
 
-export const DATA_DIR = resolveDataDir();
-export const RAW_DIR = join(DATA_DIR, 'raw');
-export const WIKI_DIR = join(DATA_DIR, 'wiki');
-export const DB_PATH = join(DATA_DIR, 'wiki.db');
+let DATA_DIR = defaultDataDir();
+let RAW_DIR = join(DATA_DIR, 'raw');
+let WIKI_DIR = join(DATA_DIR, 'wiki');
+let DB_PATH = join(DATA_DIR, 'wiki.db');
 
-for (const dir of [DATA_DIR, RAW_DIR, join(WIKI_DIR, 'sources'), join(WIKI_DIR, 'entities'), join(WIKI_DIR, 'concepts'), join(WIKI_DIR, 'analyses')]) {
-	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+function ensureDirs(): void {
+	for (const dir of [DATA_DIR, RAW_DIR, join(WIKI_DIR, 'sources'), join(WIKI_DIR, 'entities'), join(WIKI_DIR, 'concepts'), join(WIKI_DIR, 'analyses')]) {
+		if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	}
+}
+
+ensureDirs();
+
+export function getDataDir(): string {
+	return DATA_DIR;
+}
+
+export function getRawDir(): string {
+	return RAW_DIR;
+}
+
+export function getWikiDir(): string {
+	return WIKI_DIR;
+}
+
+export function getDbPath(): string {
+	return DB_PATH;
+}
+
+/**
+ * Test seam: repoint all wiki storage at another directory (e.g. a tmp dir).
+ * Closes any open database first. Not for production use.
+ */
+export function configureWikiPaths(dataDir: string): void {
+	closeDb();
+	DATA_DIR = resolve(dataDir);
+	RAW_DIR = join(DATA_DIR, 'raw');
+	WIKI_DIR = join(DATA_DIR, 'wiki');
+	DB_PATH = join(DATA_DIR, 'wiki.db');
+	db = null;
+	ensureDirs();
 }
 
 let db: DatabaseSync | null = null;
@@ -79,15 +113,24 @@ export function getDb(): DatabaseSync {
 	db.exec('PRAGMA journal_mode = WAL;');
 	db.exec(SCHEMA);
 	// Lightweight migrations for existing databases
-	const srcCols = db.prepare("PRAGMA table_info(sources)").all() as Array<{ name: string }>;
+	const srcCols = db.prepare('PRAGMA table_info(sources)').all() as Array<{ name: string }>;
 	if (!srcCols.some((c) => c.name === 'stored_name')) {
 		db.exec('ALTER TABLE sources ADD COLUMN stored_name TEXT NOT NULL DEFAULT ""');
 	}
-	const msgCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+	const msgCols = db.prepare('PRAGMA table_info(chat_messages)').all() as Array<{ name: string }>;
 	if (!msgCols.some((c) => c.name === 'thinking')) {
 		db.exec("ALTER TABLE chat_messages ADD COLUMN thinking TEXT NOT NULL DEFAULT ''");
 	}
 	return db;
+}
+
+export function closeDb(): void {
+	try {
+		db?.close();
+	} catch {
+		/* ignore */
+	}
+	db = null;
 }
 
 export function upsertPageFts(path: string, title: string, body: string): void {
@@ -99,3 +142,6 @@ export function upsertPageFts(path: string, title: string, body: string): void {
 export function deletePageFts(path: string): void {
 	getDb().prepare('DELETE FROM wiki_pages_fts WHERE path = ?').run(path);
 }
+
+// Back-compat named exports (prefer the get*Dir() accessors in new code)
+export { RAW_DIR, WIKI_DIR, DATA_DIR, DB_PATH };

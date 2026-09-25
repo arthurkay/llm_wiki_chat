@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, appendFileSync, rmSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { execSync } from 'node:child_process';
+import type { DatabaseSync } from 'node:sqlite';
 import { getDb, upsertPageFts, RAW_DIR, WIKI_DIR } from './db.js';
 import { createSession, sendMessage, isOpencodeReachable } from './opencode.js';
 
@@ -20,7 +21,7 @@ export interface IngestJob {
 	error: string | null;
 }
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
 	return name.toLowerCase().replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'untitled';
 }
 
@@ -28,7 +29,7 @@ function sha256(buf: Buffer): string {
 	return createHash('sha256').update(buf).digest('hex');
 }
 
-function extractText(filename: string, buf: Buffer): string {
+export function extractText(filename: string, buf: Buffer): string {
 	const lower = filename.toLowerCase();
 	if (lower.endsWith('.pdf')) {
 		try {
@@ -50,7 +51,7 @@ function extractText(filename: string, buf: Buffer): string {
 	return buf.toString('utf-8').slice(0, 60000);
 }
 
-function today(): string {
+export function today(): string {
 	return new Date().toISOString().slice(0, 10);
 }
 
@@ -70,7 +71,7 @@ function appendLog(entry: string): void {
 	appendFileSync(logPath, entry);
 }
 
-function deterministicPages(title: string, filename: string, text: string): Array<{ path: string; title: string; kind: string; body: string }> {
+export function deterministicPages(title: string, filename: string, text: string): Array<{ path: string; title: string; kind: string; body: string }> {
 	const slug = slugify(filename);
 	const excerpt = text.slice(0, 2000);
 	return [
@@ -112,6 +113,13 @@ async function llmPages(title: string, filename: string, text: string): Promise<
 			body: `---\ntype: source\ntitle: "${title.replace(/"/g, "'")}"\nsources: ["${filename}"]\n---\n\n# ${title}\n\n## Analysis\n\n${analysis.slice(0, 8000)}\n`
 		}
 	];
+}
+
+/** True when the source/job vanished mid-run (deleted or reset): results must be dropped. */
+export function isRunAborted(db: Pick<DatabaseSync, 'prepare'>, sourceId: string, jobId: string): boolean {
+	const stillThere = db.prepare('SELECT id FROM sources WHERE id = ?').get(sourceId) as { id: string } | undefined;
+	const jobRow = db.prepare('SELECT status FROM ingest_jobs WHERE id = ?').get(jobId) as { status: string } | undefined;
+	return !stillThere || !jobRow || jobRow.status !== 'processing';
 }
 
 export function refreshIndexAndOverview(): void {
@@ -209,9 +217,7 @@ async function processJob(jobId: string): Promise<void> {
 		const pages = reachable ? await llmPages(title, src.filename, text) : deterministicPages(title, src.filename, text);
 
 		// Source deleted while the LLM was working: drop the result, no orphans
-		const stillThere = db.prepare('SELECT id FROM sources WHERE id = ?').get(src.id) as { id: string } | undefined;
-		const jobRow = db.prepare('SELECT status FROM ingest_jobs WHERE id = ?').get(jobId) as { status: string } | undefined;
-		if (!stillThere || !jobRow || jobRow.status !== 'processing') {
+		if (isRunAborted(db, src.id, jobId)) {
 			appendLog(`\n## [${today()}] ingest-skipped | ${src.filename} (source removed mid-run)\n`);
 			return;
 		}
