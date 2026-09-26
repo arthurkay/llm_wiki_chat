@@ -1,5 +1,9 @@
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-	const res = await fetch(path, init);
+async function req<T>(path: string, init?: RequestInit, timeoutMs = 30_000): Promise<T> {
+	const timeout = AbortSignal.timeout(timeoutMs);
+	const res = await fetch(path, {
+		...init,
+		signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+	});
 	const data = await res.json().catch(() => ({}));
 	if (!res.ok) throw new Error((data as { error?: string }).error ?? 'request failed');
 	return data as T;
@@ -107,10 +111,12 @@ export const wikiApi = {
 	sources: () => req<WikiSource[]>('/api/documents'),
 	upload: async (file: File) => {
 		// Raw octet-stream with ?filename= : immune to multipart parser limits.
+		// Generous timeout: big files on slow mobile networks need time.
 		const res = await fetch(`/api/documents?filename=${encodeURIComponent(file.name)}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/octet-stream' },
-			body: file
+			body: file,
+			signal: AbortSignal.timeout(180_000)
 		});
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) throw new Error((data as { error?: string }).error || 'Upload failed');
@@ -132,7 +138,7 @@ export const wikiApi = {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ message, sessionId }),
 			signal
-		}),
+		}, 300_000),
 	history: (sessionId: string) =>
 		req<Array<{ role: string; content: string; citations: string; thinking?: string }>>(`/api/chat?sessionId=${sessionId}`),
 	sessions: (ids: string[]) =>

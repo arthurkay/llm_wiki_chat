@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { useTempWiki } from '../../../tests/tmpwiki.js';
 import { getDb, upsertPageFts } from '$lib/server/wiki/db.js';
-import { searchWiki, expandWikilinks, retrieveWikiContext, buildWikiContext, listPages } from '$lib/server/wiki/query.js';
+import { searchWiki, expandWikilinks, retrieveWikiContext, buildWikiContext, listPages, pageCitations, type WikiHit } from '$lib/server/wiki/query.js';
 
 useTempWiki();
 
@@ -52,8 +52,30 @@ describe('expandWikilinks', () => {
 
 	it('ignores links with no matching page', () => {
 		seed();
-		const expanded = expandWikilinks([{ path: 'x.md', title: 'X', body: 'See [[Nobody Here]] ok', rank: 0 }]);
+		const expanded = expandWikilinks([{ path: 'x.md', title: 'X', body: 'See [[Nobody Here]] ok', rank: 0, sources: '[]' }]);
 		expect(expanded).toHaveLength(1);
+	});
+});
+
+describe('pageCitations', () => {
+	const hit = (over: Partial<WikiHit>): WikiHit => ({ path: 'p.md', title: 'T', body: 'b', rank: 0, sources: '[]', ...over });
+
+	it('cites source document names, deduped in order', () => {
+		expect(
+			pageCitations([
+				hit({ path: 'sources/a.md', sources: JSON.stringify(['Board minutes.pdf', 'Policy.docx']) }),
+				hit({ path: 'entities/x.md', sources: JSON.stringify(['Board minutes.pdf']) })
+			])
+		).toEqual(['Board minutes.pdf', 'Policy.docx']);
+	});
+
+	it('falls back to the wiki path without provenance', () => {
+		expect(pageCitations([hit({ path: 'sources/a.md', sources: '[]' })])).toEqual(['sources/a.md']);
+		expect(pageCitations([hit({ path: 'sources/a.md', sources: 'not-json' })])).toEqual(['sources/a.md']);
+	});
+
+	it('skips non-string entries', () => {
+		expect(pageCitations([hit({ sources: JSON.stringify(['ok.pdf', 42, '']) })])).toEqual(['ok.pdf']);
 	});
 });
 

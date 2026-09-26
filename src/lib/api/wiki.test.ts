@@ -47,8 +47,11 @@ describe('wikiApi client', () => {
 		vi.stubGlobal('fetch', fetchMock);
 		await wikiApi.deleteSource('s1');
 		await wikiApi.deletePage('a/b.md');
-		expect(fetchMock).toHaveBeenCalledWith('/api/documents/s1', { method: 'DELETE' });
-		expect(fetchMock).toHaveBeenCalledWith('/api/wiki/pages/a/b.md', { method: 'DELETE' });
+		const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+		expect(calls.map(([url, init]) => [url, init.method])).toEqual([
+			['/api/documents/s1', 'DELETE'],
+			['/api/wiki/pages/a/b.md', 'DELETE']
+		]);
 	});
 
 	it('fetches pages, search, chat, history, sessions and settings', async () => {

@@ -17,7 +17,9 @@ function seedSession(withOpencode = true): string {
 }
 
 function seedWiki() {
-	getDb().prepare("INSERT INTO wiki_pages (path, title, kind, body) VALUES ('sources/a.md','A','source','greetings and salutations')").run();
+	getDb().prepare("INSERT INTO wiki_pages (path, title, kind, body, sources) VALUES ('sources/a.md','A','source','greetings and salutations',?)").run(
+		JSON.stringify(['hello-doc.pdf'])
+	);
 	upsertPageFts('sources/a.md', 'A', 'greetings and salutations');
 }
 
@@ -79,7 +81,7 @@ describe('POST /api/chat', () => {
 			request: new Request('http://test/api/chat', { method: 'POST', body: JSON.stringify({ message: 'greetings friend' }) })
 		} as never);
 		const body = (await res.json()) as { sessionId: string; reply: string; citations: string[]; opencode: boolean };
-		expect(body).toMatchObject({ reply: 'sync reply', citations: ['sources/a.md'], opencode: true });
+		expect(body).toMatchObject({ reply: 'sync reply', citations: ['hello-doc.pdf'], opencode: true });
 		const saved = getDb().prepare('SELECT role FROM chat_messages WHERE session_id = ? ORDER BY created_at').all(body.sessionId) as Array<{
 			role: string;
 		}>;

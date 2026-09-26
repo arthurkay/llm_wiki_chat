@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '$lib/server/wiki/db.js';
-import { retrieveWikiContext, buildWikiContext } from '$lib/server/wiki/query.js';
+import { retrieveWikiContext, buildWikiContext, pageCitations } from '$lib/server/wiki/query.js';
 import { createSession, sendMessageStream, isOpencodeReachable, abortSession } from '$lib/server/wiki/opencode.js';
 import { getSettings, parseModel } from '$lib/server/wiki/settings.js';
 
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const pages = retrieveWikiContext(message, 5);
 	const context = buildWikiContext(pages);
-	const citations = pages.map((p) => p.path);
+	const citations = pageCitations(pages);
 	const settings = getSettings();
 
 	const stream = new ReadableStream({
