@@ -75,6 +75,25 @@ journalctl -u wikichat -f   # logs
 
 Run `opencode serve` under its own unit (or existing session) on the same host.
 
+### Read-only chat agent (one-time backend setup)
+
+Chat answers should run with zero tools. Define once in the serving host's
+`opencode.json` (`~/.config/opencode/opencode.json`, then restart serve):
+
+```json
+{ "agent": { "wiki-readonly": {
+  "mode": "primary",
+  "description": "Answers wiki questions from provided context. No tools.",
+  "permission": { "*": "deny" }
+} } }
+```
+
+Then set it in `/admin` → Chat settings → Agent (`wiki-readonly`), or leave
+empty for the server-default agent. Deny, never ask — headless serve stalls on
+prompts. Verified: backends may reject restricted agents (opencode free tier
+403s); the app fails closed with a clear error instead of silently falling back.
+The ingest worker is unaffected (never sends `agent`).
+
 ## 5. LAN / reverse proxy
 
 - Same-machine LAN use: `HOST=0.0.0.0`, open the firewall (`sudo ufw allow 5174/tcp`),

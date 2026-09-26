@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getDb } from '$lib/server/wiki/db.js';
 import { retrieveWikiContext, buildWikiContext, pageCitations } from '$lib/server/wiki/query.js';
 import { createSession, sendMessageStream, isOpencodeReachable, abortSession } from '$lib/server/wiki/opencode.js';
-import { getSettings, parseModel } from '$lib/server/wiki/settings.js';
+import { getSettings, parseModel, parseAgent } from '$lib/server/wiki/settings.js';
 
 // Streaming chat: same wiki grounding as /api/chat, but tokens stream to the
 // browser as SSE so slow models never look hung. Final message persisted.
@@ -73,6 +73,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				const { text: full, thinking } = await sendMessageStream(opencodeId, message, {
 					system: `${settings.system_prompt}\n\nWIKI CONTEXT:\n${context}`,
 					model: parseModel(settings.chat_model),
+					agent: parseAgent(settings.chat_agent),
 					signal: request.signal,
 					onToken: (token, fullText, kind) => send(kind === 'thinking' ? { thinking: token, thinkingFull: fullText } : { token, full: fullText })
 				});

@@ -32,7 +32,7 @@ beforeEach(() => {
 	mocked.sources.mockResolvedValue([{ id: 's1', filename: 'a.pdf', file_type: 'pdf', file_size: 10, status: 'completed', created_at: '' }]);
 	mocked.jobs.mockResolvedValue([]);
 	mocked.pages.mockResolvedValue([{ path: 'sources/a.md', title: 'A', kind: 'source', updated_at: '' }]);
-	mocked.settings.mockResolvedValue({ chat_model: '', system_prompt: 'sys', models: [], opencode: false, default_system_prompt: 'sys' });
+	mocked.settings.mockResolvedValue({ chat_model: '', system_prompt: 'sys', chat_agent: '', models: [], opencode: false, default_system_prompt: 'sys' });
 });
 
 afterEach(() => cleanup());

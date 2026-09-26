@@ -18,6 +18,15 @@ export interface OpenCodeSession {
 	title?: string;
 }
 
+/**
+ * Agent used for all /chat answers. Must be a `primary` agent with every
+ * permission denied (see opencode.json `wiki-readonly`) so chat can only
+ * answer from injected wiki context — never read/write files, run commands,
+ * or touch MCP tools. Deny (not ask): headless serve would stall on prompts.
+ * The ingest worker intentionally does NOT use this agent (see ingest.ts).
+ */
+export const CHAT_AGENT = 'wiki-readonly';
+
 interface TextPart {
 	type: 'text';
 	text: string;
@@ -165,12 +174,13 @@ export async function abortSession(opencodeSessionId: string): Promise<void> {
 async function postPromptAsync(
 	opencodeSessionId: string,
 	text: string,
-	opts: { system?: string; model?: string | { providerID: string; modelID: string } } = {}
+	opts: { system?: string; model?: string | { providerID: string; modelID: string }; agent?: string } = {}
 ): Promise<void> {
 	const parts = [{ type: 'text', text }];
 	const body: Record<string, unknown> = { parts };
 	if (opts.system) body.system = opts.system;
 	if (opts.model) body.model = opts.model;
+	if (opts.agent) body.agent = opts.agent;
 	let lastErr = '';
 	for (const [, send] of sessionRoutes()) {
 		try {
@@ -202,7 +212,7 @@ export interface StreamCallbacks {
 export async function sendMessageStream(
 	opencodeSessionId: string,
 	text: string,
-	opts: { system?: string; model?: string | { providerID: string; modelID: string } } & StreamCallbacks
+	opts: { system?: string; model?: string | { providerID: string; modelID: string }; agent?: string } & StreamCallbacks
 ): Promise<{ text: string; thinking: string }> {
 	const timeoutMs = opts.timeoutMs ?? 600_000;
 	const controller = new AbortController();
@@ -237,7 +247,7 @@ export async function sendMessageStream(
 		});
 		if (!streamRes.ok || !streamRes.body) throw new Error(`event bus ${streamRes.status}`);
 
-		await postPromptAsync(opencodeSessionId, text, { system: opts.system, model: opts.model });
+		await postPromptAsync(opencodeSessionId, text, { system: opts.system, model: opts.model, agent: opts.agent });
 
 		const reader = streamRes.body.getReader();
 		const decoder = new TextDecoder();

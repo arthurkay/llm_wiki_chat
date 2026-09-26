@@ -102,6 +102,7 @@ export interface ChatSession {
 export interface ChatSettingsResponse {
 	chat_model: string;
 	system_prompt: string;
+	chat_agent: string;
 	models: Array<{ id: string; provider: string; model: string }>;
 	opencode: boolean;
 	default_system_prompt: string;
@@ -150,7 +151,7 @@ export const wikiApi = {
 			`/api/wiki/pages/${encodeURI(path)}`
 		),
 	settings: () => req<ChatSettingsResponse>('/api/settings'),
-	saveSettings: (patch: { chat_model?: string; system_prompt?: string }) =>
+	saveSettings: (patch: { chat_model?: string; system_prompt?: string; chat_agent?: string }) =>
 		req<ChatSettingsResponse>('/api/settings', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },

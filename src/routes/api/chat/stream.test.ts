@@ -24,6 +24,7 @@ afterAll(() => {
 
 const SID = 'ses-e2e';
 let failPrompt = false;
+const postedPromptBodies: string[] = [];
 
 function sse(payload: object): string {
 	return `data: ${JSON.stringify(payload)}\n\n`;
@@ -61,8 +62,13 @@ async function startBus(script: Array<object>): Promise<void> {
 				res.end('{"error":"boom"}');
 				return;
 			}
-			res.writeHead(204);
-			res.end();
+			let body = '';
+			req.on('data', (c) => (body += c));
+			req.on('end', () => {
+				postedPromptBodies.push(body);
+				res.writeHead(204);
+				res.end();
+			});
 			return;
 		}
 		if (req.method === 'POST' && url === `/session/${SID}/abort`) {
@@ -78,38 +84,7 @@ async function startBus(script: Array<object>): Promise<void> {
 		server.listen(0, '127.0.0.1', () => {
 			const addr = server.address();
 			resolve(`http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`);
-	it('creates local and opencode sessions when none is given', async () => {
-		const res = await POST({
-			request: new Request('http://test/api/chat/stream', {
-				method: 'POST',
-				body: JSON.stringify({ message: 'fresh chat here' })
-			})
-		} as never);
-		const events = (await collect(res)) as Array<Record<string, unknown>>;
-		const done = events.find((e) => e.done) as Record<string, unknown>;
-		expect(done).toMatchObject({ opencode: true });
-		expect(typeof done.sessionId).toBe('string');
-		const row = getDb().prepare('SELECT opencode_session_id AS id FROM chat_sessions WHERE id = ?').get(done.sessionId as string) as { id: string };
-		expect(row.id).toBe(SID);
-	});
-
-	it('forwards generation errors as error frames', async () => {
-		failPrompt = true;
-		try {
-			const res = await POST({
-				request: new Request('http://test/api/chat/stream', {
-					method: 'POST',
-					body: JSON.stringify({ message: 'will fail', sessionId: 'local-1' })
-				})
-			} as never);
-			const events = (await collect(res)) as Array<Record<string, unknown>>;
-			const err = events.find((e) => e.error) as Record<string, unknown>;
-			expect(String(err.error)).toMatch(/prompt_async|boom/);
-		} finally {
-			failPrompt = false;
-		}
-	});
-});
+		});
 	});
 	setOpencodeBase(url);
 }
@@ -123,6 +98,7 @@ const script = [
 ];
 
 beforeEach(async () => {
+	postedPromptBodies.length = 0;
 	await startBus(script);
 	getDb().prepare("INSERT INTO chat_sessions (id, opencode_session_id, title) VALUES ('local-1', ?, 't')").run(SID);
 });
@@ -171,6 +147,71 @@ describe('POST /api/chat/stream', () => {
 		}>;
 		expect(saved.map((m) => m.role)).toEqual(['user', 'assistant']);
 		expect(saved[1]).toMatchObject({ content: 'final answer', thinking: 'thinking hard' });
+	});
+
+	it('streams answers via the read-only agent', async () => {
+		const { updateSettings } = await import('$lib/server/wiki/settings.js');
+		updateSettings({ chat_agent: 'wiki-readonly' });
+		const res = await POST({
+			request: new Request('http://test/api/chat/stream', {
+				method: 'POST',
+				body: JSON.stringify({ message: 'deep question', sessionId: 'local-1' })
+			})
+		} as never);
+		// Drain the stream: prompt_async is issued inside the stream's start()
+		const events = (await collect(res)) as Array<Record<string, unknown>>;
+		expect(events.find((e) => e.done)).toBeTruthy();
+		expect(postedPromptBodies.length).toBeGreaterThan(0);
+		for (const raw of postedPromptBodies) {
+			expect(JSON.parse(raw).agent).toBe('wiki-readonly');
+		}
+	});
+
+	it('creates local and opencode sessions when none is given', async () => {
+		const res = await POST({
+			request: new Request('http://test/api/chat/stream', {
+				method: 'POST',
+				body: JSON.stringify({ message: 'fresh chat here' })
+			})
+		} as never);
+		const events = (await collect(res)) as Array<Record<string, unknown>>;
+		const done = events.find((e) => e.done) as Record<string, unknown>;
+		expect(done).toMatchObject({ opencode: true });
+		expect(typeof done.sessionId).toBe('string');
+		const row = getDb().prepare('SELECT opencode_session_id AS id FROM chat_sessions WHERE id = ?').get(done.sessionId as string) as { id: string };
+		expect(row.id).toBe(SID);
+	});
+
+	it('forwards generation errors as error frames', async () => {
+		failPrompt = true;
+		try {
+			const res = await POST({
+				request: new Request('http://test/api/chat/stream', {
+					method: 'POST',
+					body: JSON.stringify({ message: 'will fail', sessionId: 'local-1' })
+				})
+			} as never);
+			const events = (await collect(res)) as Array<Record<string, unknown>>;
+			const err = events.find((e) => e.error) as Record<string, unknown>;
+			expect(String(err.error)).toMatch(/prompt_async|boom/);
+		} finally {
+			failPrompt = false;
+		}
+	});
+
+	it('omits agent by default so free-tier backends keep working', async () => {
+		const res = await POST({
+			request: new Request('http://test/api/chat/stream', {
+				method: 'POST',
+				body: JSON.stringify({ message: 'deep question', sessionId: 'local-1' })
+			})
+		} as never);
+		const events = (await collect(res)) as Array<Record<string, unknown>>;
+		expect(events.find((e) => e.done)).toBeTruthy();
+		expect(postedPromptBodies.length).toBeGreaterThan(0);
+		for (const raw of postedPromptBodies) {
+			expect(JSON.parse(raw)).not.toHaveProperty('agent');
+		}
 	});
 
 	it('serves the offline fallback with citations', async () => {

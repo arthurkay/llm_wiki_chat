@@ -7,7 +7,8 @@ import {
 	abortSession,
 	isOpencodeReachable,
 	extractReplyText,
-	setOpencodeBase
+	setOpencodeBase,
+	CHAT_AGENT
 } from '$lib/server/wiki/opencode.js';
 
 const seen: SeenRequest[] = [];
@@ -64,6 +65,22 @@ describe('sessions and messages', () => {
 
 	it('recovers from a non-JSON 200 via the v2 route', async () => {
 		await expect(sendMessage('ses_html', 'hi')).resolves.toBe('recovered');
+	});
+
+	it('defines the read-only chat agent', () => {
+		expect(CHAT_AGENT).toBe('wiki-readonly');
+	});
+
+	it('forwards the agent when provided', async () => {
+		await sendMessage('ses_1', 'hi', { agent: CHAT_AGENT });
+		const posted = seen.find((r) => r.url === '/session/ses_1/message');
+		expect(JSON.parse(posted?.body ?? '{}').agent).toBe('wiki-readonly');
+	});
+
+	it('omits agent when not provided', async () => {
+		await sendMessage('ses_1', 'hi');
+		const posted = seen.find((r) => r.url === '/session/ses_1/message');
+		expect(JSON.parse(posted?.body ?? '{}')).not.toHaveProperty('agent');
 	});
 
 	it('lists messages', async () => {

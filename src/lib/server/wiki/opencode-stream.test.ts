@@ -40,8 +40,13 @@ async function startStreamingStub(script: Array<object>, delayMs = 5): Promise<v
 			return;
 		}
 		if (req.method === 'POST' && url === '/session/ses_stream/prompt_async') {
-			res.writeHead(204);
-			res.end();
+			let body = '';
+			req.on('data', (c) => (body += c));
+			req.on('end', () => {
+				postedPromptBodies.push(body);
+				res.writeHead(204);
+				res.end();
+			});
 			return;
 		}
 		if (req.method === 'POST' && url === '/session/ses_stream/abort') {
@@ -64,8 +69,8 @@ async function startStreamingStub(script: Array<object>, delayMs = 5): Promise<v
 }
 
 const SID = 'ses_stream';
-const script = [
-	{ id: 'e1', type: 'message.part.updated', properties: { sessionID: SID, part: { id: 'p-reason', type: 'reasoning' } } },
+const postedPromptBodies: string[] = [];
+const script = [	{ id: 'e1', type: 'message.part.updated', properties: { sessionID: SID, part: { id: 'p-reason', type: 'reasoning' } } },
 	{ id: 'e2', type: 'message.part.delta', properties: { sessionID: SID, partID: 'p-reason', field: 'text', delta: 'hmm ' } },
 	{ id: 'e3', type: 'message.part.delta', properties: { sessionID: SID, partID: 'p-reason', field: 'text', delta: 'thinking' } },
 	{ id: 'e4', type: 'message.part.updated', properties: { sessionID: SID, part: { id: 'p-text', type: 'text' } } },
@@ -78,6 +83,7 @@ const script = [
 
 beforeEach(async () => {
 	aborted.length = 0;
+	postedPromptBodies.length = 0;
 	await startStreamingStub(script);
 });
 
@@ -121,6 +127,19 @@ describe('sendMessageStream', () => {
 		const pending = sendMessageStream(SID, 'q?', { onToken: () => {}, signal: controller.signal, timeoutMs: 5000 });
 		setTimeout(() => controller.abort(), 100);
 		await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+	});
+
+	it('forwards the agent to prompt_async when provided', async () => {
+		const { CHAT_AGENT } = await import('$lib/server/wiki/opencode.js');
+		await sendMessageStream(SID, 'question?', {
+			system: 'sys',
+			agent: CHAT_AGENT,
+			onToken: () => {}
+		});
+		expect(postedPromptBodies.length).toBeGreaterThan(0);
+		for (const raw of postedPromptBodies) {
+			expect(JSON.parse(raw).agent).toBe('wiki-readonly');
+		}
 	});
 });
 

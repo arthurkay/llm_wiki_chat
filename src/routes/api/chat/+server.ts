@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { getDb } from '$lib/server/wiki/db.js';
 import { retrieveWikiContext, buildWikiContext, pageCitations } from '$lib/server/wiki/query.js';
 import { createSession, sendMessage, isOpencodeReachable } from '$lib/server/wiki/opencode.js';
-import { getSettings, parseModel } from '$lib/server/wiki/settings.js';
+import { getSettings, parseModel, parseAgent } from '$lib/server/wiki/settings.js';
 
 // Wiki-grounded chat: retrieve compiled wiki pages (FTS5 + wikilink expansion),
 // inject as context under the admin-configured personality, persist in sqlite.
@@ -46,7 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const reply = await sendMessage(
 		opencodeId,
 		message,
-		{ system: `${settings.system_prompt}\n\nWIKI CONTEXT:\n${context}`, model: parseModel(settings.chat_model) }
+		{ system: `${settings.system_prompt}\n\nWIKI CONTEXT:\n${context}`, model: parseModel(settings.chat_model), agent: parseAgent(settings.chat_agent) }
 	);
 	db.prepare('INSERT INTO chat_messages (id, session_id, role, content, citations) VALUES (?, ?, ?, ?, ?)').run(
 		randomUUID(), sid, 'assistant', reply, JSON.stringify(citations)

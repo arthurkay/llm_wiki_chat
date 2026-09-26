@@ -11,6 +11,7 @@ Rules:
 export interface ChatSettings {
 	chat_model: string;
 	system_prompt: string;
+	chat_agent: string;
 }
 
 export function getSettings(): ChatSettings {
@@ -21,7 +22,8 @@ export function getSettings(): ChatSettings {
 	};
 	return {
 		chat_model: get('chat_model') ?? '',
-		system_prompt: get('system_prompt') ?? DEFAULT_SYSTEM_PROMPT
+		system_prompt: get('system_prompt') ?? DEFAULT_SYSTEM_PROMPT,
+		chat_agent: get('chat_agent') ?? ''
 	};
 }
 
@@ -42,4 +44,15 @@ export function parseModel(ref: string): { providerID: string; modelID: string }
 	const i = ref.indexOf('/');
 	if (i <= 0 || i === ref.length - 1) return undefined;
 	return { providerID: ref.slice(0, i), modelID: ref.slice(i + 1) };
+}
+
+/**
+ * Agent override for chat answers (e.g. a read-only agent defined in
+ * opencode.json). Empty = server default. NOTE: restricted agents/agents
+ * with tool overrides are rejected by some backends (opencode free tier
+ * returns 403) — only set this where the backend permits it.
+ */
+export function parseAgent(ref: string): string | undefined {
+	const name = ref.trim();
+	return name ? name : undefined;
 }

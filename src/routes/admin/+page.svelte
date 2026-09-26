@@ -78,7 +78,7 @@
 		if (!settings || saving) return;
 		saving = true;
 		try {
-			settings = await wikiApi.saveSettings({ chat_model: settings.chat_model, system_prompt: settings.system_prompt });
+			settings = await wikiApi.saveSettings({ chat_model: settings.chat_model, system_prompt: settings.system_prompt, chat_agent: settings.chat_agent });
 			savedAt = new Date().toLocaleTimeString();
 			setTimeout(() => (savedAt = null), 4000);
 			toasts.success('Settings saved');
@@ -341,6 +341,19 @@
 					{:else if !settings.opencode}
 						<Badge variant="destructive">opencode offline — model list unavailable</Badge>
 					{/if}
+				</div>
+				<div class="min-w-0 space-y-2">
+					<label class="text-sm font-medium" for="agent-input">Agent (optional)</label>
+					<Input
+						id="agent-input"
+						bind:value={settings.chat_agent}
+						placeholder="Empty = server default agent"
+						class="min-w-0 font-mono text-xs"
+						autocomplete="off"
+					/>
+					<p class="text-muted-foreground text-xs">
+						Name of an opencode agent (e.g. <code>wiki-readonly</code>) forced onto every chat answer. Leave empty for default behavior — restricted agents are rejected by some backends.
+					</p>
 				</div>
 				<div class="min-w-0 space-y-2">
 					<label class="text-sm font-medium" for="system-prompt">System prompt</label>

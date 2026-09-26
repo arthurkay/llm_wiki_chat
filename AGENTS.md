@@ -70,6 +70,16 @@ Core flows:
   user may contribute sources), `GET /api/wiki/search`, `GET /api/wiki/pages*`.
   The `/admin` page renders always and shows a lock screen when gated.
 - Never log or return the password. Never commit it. Cookie lifetime is 30 days.
+- Chat answers run read-only by default: the app can pin every chat message to
+  a deny-all opencode agent via the `chat_agent` setting (`parseAgent()` in
+  `src/lib/server/wiki/settings.ts`, `CHAT_AGENT` in `opencode.ts`). The agent
+  itself is defined server-side in `opencode.json` (`wiki-readonly`, `mode:
+  primary`, `permission: {"*": "deny"}` — deny, never ask: headless serve would
+  stall on prompts). Empty `chat_agent` = server-default agent (current
+  behavior). Caveat, verified live: backends can reject restricted agents
+  (opencode free tier returns 403) — the app fails closed with a clear error,
+  never silently falls back. The ingest worker never sends `agent` (stays
+  read-write by design).
 
 ## 3. Repo layout
 

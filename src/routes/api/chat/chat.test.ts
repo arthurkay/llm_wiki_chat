@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useTempWiki } from '../../../tests/tmpwiki.js';
-import { startOpencodeStub } from '../../../tests/stubserver.js';
+import { startOpencodeStub, type SeenRequest } from '../../../tests/stubserver.js';
 import { getDb, upsertPageFts } from '$lib/server/wiki/db.js';
 import { GET, POST } from './+server.js';
 import { POST as streamPost } from './stream/+server.js';
 
 useTempWiki();
+
+const seen: SeenRequest[] = [];
 
 function seedSession(withOpencode = true): string {
 	const db = getDb();
@@ -24,6 +26,7 @@ function seedWiki() {
 }
 
 beforeEach(async () => {
+	seen.length = 0;
 	await startOpencodeStub({
 		'GET /global/health': () => ({ json: { healthy: true } }),
 		'POST /session': () => ({ json: { id: 'ses-new', title: 't' } }),
@@ -31,7 +34,7 @@ beforeEach(async () => {
 		'POST /session/*/message': () => ({ json: { info: {}, parts: [{ type: 'text', text: 'sync reply' }] } }),
 		'POST /session/ses-remote/prompt_async': () => ({ status: 204, json: {} }),
 		'GET /event': () => ({ json: {} }) // unused; real streaming covered in opencode-stream tests
-	});
+	}, seen);
 });
 
 describe('GET /api/chat', () => {
@@ -88,6 +91,26 @@ describe('POST /api/chat', () => {
 		expect(saved.map((m) => m.role)).toEqual(['user', 'assistant']);
 		const opencodeId = (getDb().prepare('SELECT opencode_session_id AS id FROM chat_sessions WHERE id = ?').get(body.sessionId) as { id: string }).id;
 		expect(opencodeId).toBe('ses-new');
+	});
+
+	it('sends chat answers via the read-only agent', async () => {
+		seedWiki();
+		const { updateSettings } = await import('$lib/server/wiki/settings.js');
+		updateSettings({ chat_agent: 'wiki-readonly' });
+		await POST({
+			request: new Request('http://test/api/chat', { method: 'POST', body: JSON.stringify({ message: 'greetings friend' }) })
+		} as never);
+		const posted = seen.find((r) => r.url === '/session/ses-new/message');
+		expect(JSON.parse(posted?.body ?? '{}').agent).toBe('wiki-readonly');
+	});
+
+	it('omits agent by default so free-tier backends keep working', async () => {
+		seedWiki();
+		await POST({
+			request: new Request('http://test/api/chat', { method: 'POST', body: JSON.stringify({ message: 'greetings friend' }) })
+		} as never);
+		const posted = seen.find((r) => r.url === '/session/ses-new/message');
+		expect(JSON.parse(posted?.body ?? '{}')).not.toHaveProperty('agent');
 	});
 
 	it('falls back to raw wiki context when opencode is down', async () => {

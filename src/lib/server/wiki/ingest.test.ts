@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { useTempWiki } from '../../../tests/tmpwiki.js';
+import { startOpencodeStub, type SeenRequest } from '../../../tests/stubserver.js';
 import { getDb, getRawDir, getWikiDir } from '$lib/server/wiki/db.js';
 import { getOpencodeBase, setOpencodeBase } from '$lib/server/wiki/opencode.js';
 import {
@@ -164,5 +165,42 @@ describe('ingest worker', () => {
 		expect(requeueFailedJobs()).toEqual(['j2']);
 		expect(() => requeueFailedJobs('missing')).toThrow(/not found/);
 		expect(() => requeueFailedJobs('j1')).toThrow(/only failed jobs/);
+	});
+
+	it('runs LLM ingest without requesting any agent (worker stays default)', async () => {
+		const seen: SeenRequest[] = [];
+		let messageCalls = 0;
+		await startOpencodeStub(
+			{
+				'GET /global/health': () => ({ json: { healthy: true } }),
+				'POST /session': () => ({ json: { id: 'ses_ing', title: 't' } }),
+				'POST /session/ses_ing/message': () => {
+					messageCalls += 1;
+					const text =
+						messageCalls === 1
+							? 'Analysis: key takeaways, entities, concepts. No braces here.'
+							: JSON.stringify({
+									pages: [{ path: 'sources/llm.md', title: 'LLM Doc', kind: 'source', body: '# LLM Doc\n\nCompiled.' }]
+								});
+					return { json: { info: {}, parts: [{ type: 'text', text }] } };
+				}
+			},
+			seen
+		);
+		enqueue('llm.txt', 'content for the language model');
+		await processPendingJobs();
+		const job = getDb().prepare('SELECT status FROM ingest_jobs').get() as { status: string };
+		expect(job.status).toBe('done');
+		// Proves the LLM path ran (not the deterministic fallback)
+		const page = getDb().prepare('SELECT body FROM wiki_pages WHERE path = ?').get('sources/llm.md') as { body: string };
+		expect(page.body).toContain('Compiled.');
+		// Worker must not request (or inherit) any agent — read-only is chat-only
+		const messageBodies = seen
+			.filter((r) => r.url === '/session/ses_ing/message')
+			.map((r) => JSON.parse(r.body));
+		expect(messageBodies).toHaveLength(2);
+		for (const body of messageBodies) {
+			expect(body).not.toHaveProperty('agent');
+		}
 	});
 });
