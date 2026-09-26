@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { wikiApi, type WikiSource, type IngestJobRow, type WikiPageMeta, type ChatSettingsResponse } from '$lib/api/wiki';
 	import Button from '$lib/components/ui/button.svelte';
+	import { buttonClasses } from '$lib/components/ui/button.svelte';
 	import Input from '$lib/components/ui/input.svelte';
 	import Textarea from '$lib/components/ui/textarea.svelte';
 	import Badge from '$lib/components/ui/badge.svelte';
@@ -14,8 +15,10 @@
 	import Separator from '$lib/components/ui/separator.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import Toaster from '$lib/components/ui/toaster.svelte';
+	import { toasts } from '$lib/stores/toast.js';
 	import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '$lib/uploads.js';
-	import { Dialog } from 'bits-ui';
+	import { Dialog, AlertDialog } from 'bits-ui';
 	import { Upload, RefreshCw, Search, Loader2, TriangleAlert, ArrowLeft, Trash2, Save, Eye, X, Lock, LogOut } from 'lucide-svelte';
 
 	let sources = $state<WikiSource[]>([]);
@@ -32,6 +35,11 @@
 	let modelOpen = $state(false);
 	let viewing = $state<{ path: string; title: string; kind: string; body: string; sources: string; updated_at: string } | null>(null);
 	let viewerOpen = $state(false);
+	let confirmDialog = $state<{ title: string; description: string; confirmLabel: string; action: () => void } | null>(null);
+
+	function askConfirm(title: string, description: string, confirmLabel: string, action: () => void) {
+		confirmDialog = { title, description, confirmLabel, action };
+	}
 	let gate = $state<'checking' | 'open' | 'locked'>('checking');
 	let password = $state('');
 	let loggingIn = $state(false);
@@ -47,15 +55,22 @@
 		try {
 			[sources, jobs, pages] = await Promise.all([wikiApi.sources(), wikiApi.jobs(), wikiApi.pages()]);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'load failed';
+			fail(e, 'load failed');
 		}
+	}
+
+	/** Report an action failure both inline and as a toast (visible on mobile). */
+	function fail(e: unknown, fallback: string) {
+		const message = e instanceof Error ? e.message : fallback;
+		error = message;
+		toasts.error(message);
 	}
 
 	async function loadSettings() {
 		try {
 			settings = await wikiApi.settings();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'settings load failed';
+			fail(e, 'settings load failed');
 		}
 	}
 
@@ -66,8 +81,9 @@
 			settings = await wikiApi.saveSettings({ chat_model: settings.chat_model, system_prompt: settings.system_prompt });
 			savedAt = new Date().toLocaleTimeString();
 			setTimeout(() => (savedAt = null), 4000);
+			toasts.success('Settings saved');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'settings save failed';
+			fail(e, 'settings save failed');
 		} finally {
 			saving = false;
 		}
@@ -134,7 +150,7 @@
 		const check = validateUploadFile(file.name, file.size);
 		if (!check.ok) {
 			if (fileInput) fileInput.value = '';
-			error = check.error;
+			fail(new Error(check.error), check.error);
 			return;
 		}
 		uploading = true;
@@ -142,9 +158,10 @@
 		try {
 			await wikiApi.upload(file);
 			if (fileInput) fileInput.value = '';
+			toasts.success(`“${file.name}” queued for ingest`);
 			await refresh();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'upload failed';
+			fail(e, 'upload failed');
 		} finally {
 			uploading = false;
 		}
@@ -157,24 +174,28 @@
 	}
 
 	async function handleDeleteSource(id: string, filename: string) {
-		if (!confirm(`Delete "${filename}"? This removes the raw file and wiki pages derived only from it.`)) return;
-		try {
-			await wikiApi.deleteSource(id);
-			await refresh();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'delete failed';
-		}
+		askConfirm('Delete source?', `"${filename}" and wiki pages derived only from it will be removed.`, 'Delete', async () => {
+			try {
+				const result = await wikiApi.deleteSource(id);
+				toasts.success(`Deleted “${filename}”`, result.pages.length ? `+${result.pages.length} derived page(s)` : undefined);
+				await refresh();
+			} catch (e) {
+				fail(e, 'delete failed');
+			}
+		});
 	}
 
 	async function handleDeletePage(path: string) {
-		if (!confirm(`Delete wiki page "${path}"?`)) return;
-		try {
-			await wikiApi.deletePage(path);
-			if (viewing?.path === path) viewerOpen = false;
-			await refresh();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'delete failed';
-		}
+		askConfirm('Delete page?', `"${path}" will be removed from the wiki.`, 'Delete', async () => {
+			try {
+				await wikiApi.deletePage(path);
+				if (viewing?.path === path) viewerOpen = false;
+				toasts.success(`Deleted ${path}`);
+				await refresh();
+			} catch (e) {
+				fail(e, 'delete failed');
+			}
+		});
 	}
 
 	async function openViewer(path: string) {
@@ -182,7 +203,7 @@
 			viewing = await wikiApi.getPage(path);
 			viewerOpen = true;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'failed to load page';
+			fail(e, 'failed to load page');
 		}
 	}
 
@@ -209,7 +230,7 @@
 		</Button>
 		<div class="min-w-0 flex-1">
 			<h1 class="text-xl font-semibold tracking-tight md:text-2xl">Wiki Admin</h1>
-			<p class="text-muted-foreground break-words text-sm">Upload sources into <code class="break-all">data/raw</code> — the worker compiles them into <code class="break-all">data/wiki</code> via opencode.</p>
+			<p class="text-muted-foreground break-words text-sm">Upload sources, then worker compiles them.</p>
 		</div>
 		{#if gate === 'open'}
 			<Button variant="ghost" size="icon" onclick={logout} aria-label="Log out of admin">
@@ -369,11 +390,16 @@
 				</ul>
 
 				<h3 class="text-sm font-medium">Jobs</h3>
-				<ul class="space-y-1.5 text-sm">
+				<ul class="space-y-2 text-sm">
 					{#each jobs.slice(0, 10) as j}
-						<li class="flex items-center justify-between gap-2">
-							<span class="min-w-0 flex-1 truncate">{j.filename}</span>
-							<Badge variant="outline" class="shrink-0">{j.status}</Badge>
+						<li class="min-w-0">
+							<div class="flex items-center justify-between gap-2">
+								<span class="min-w-0 flex-1 truncate">{j.filename}</span>
+								<Badge variant={j.status === 'failed' ? 'destructive' : 'outline'} class="shrink-0">{j.status}</Badge>
+							</div>
+							{#if j.status === 'failed' && j.error}
+								<p class="text-muted-foreground mt-0.5 text-xs break-words">Reason: {j.error}</p>
+							{/if}
 						</li>
 					{/each}
 					{#if jobs.length === 0}
@@ -476,5 +502,37 @@
 			</Dialog.Content>
 		</Dialog.Portal>
 	</Dialog.Root>
+
+	<AlertDialog.Root open={confirmDialog !== null} onOpenChange={(open) => { if (!open) confirmDialog = null; }}>
+		<AlertDialog.Portal>
+			<AlertDialog.Overlay class="fixed inset-0 z-50 bg-black/60" />
+			<AlertDialog.Content
+				class="bg-background fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-md min-w-0 -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg"
+			>
+				<div class="flex flex-col gap-2">
+					<AlertDialog.Title class="text-lg font-semibold">{confirmDialog?.title}</AlertDialog.Title>
+					<AlertDialog.Description class="text-muted-foreground text-sm break-words">
+						{confirmDialog?.description}
+					</AlertDialog.Description>
+				</div>
+				<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+					<AlertDialog.Cancel class={buttonClasses('outline')}>
+						Cancel
+					</AlertDialog.Cancel>
+					<AlertDialog.Action
+						class={buttonClasses('destructive')}
+						onclick={() => {
+							const action = confirmDialog?.action;
+							confirmDialog = null;
+							action?.();
+						}}
+					>
+						{confirmDialog?.confirmLabel ?? 'Confirm'}
+					</AlertDialog.Action>
+				</div>
+			</AlertDialog.Content>
+		</AlertDialog.Portal>
+	</AlertDialog.Root>
 	{/if}
+	<Toaster />
 </div>
