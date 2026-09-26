@@ -565,3 +565,7 @@
 	{/if}
 	<Toaster />
 </div>
+
+<svelte:head>
+	<title>Wiki Admin</title>
+</svelte:head>

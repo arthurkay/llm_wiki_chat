@@ -135,3 +135,7 @@
 		<Composer sending={sending} onSend={send} onStop={() => wikiChat.stop()} />
 	</div>
 </div>
+
+<svelte:head>
+	<title>Wiki Chat</title>
+</svelte:head>
