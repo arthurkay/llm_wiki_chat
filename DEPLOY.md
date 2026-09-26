@@ -17,6 +17,7 @@ this repo; placeholders are `<like-this>`.
 | `OPENCODE_API_URL` | no | `http://127.0.0.1:4096` | LLM backend |
 | `ADMIN_PASSWORD` | yes, if shared | _(unset = open)_ | gates `/admin` + curating APIs |
 | `WIKI_DATA_DIR` | no | `./data` | sqlite + raw uploads + wiki vault location |
+| `BODY_SIZE_LIMIT` | no | `512K` | **must be raised** — SvelteKit rejects bigger request bodies with 413 before the app sees them. Set `24M` (covers the 20MB upload policy + overhead). The `bodySizeLimit` key in `svelte.config.js` is ignored by adapter-node 5.x; this env var is the real knob (verified in `build/` output) |
 | `PORT` / `HOST` | no | `3000` / `localhost` | adapter-node listen address |
 | `ORIGIN` | behind a proxy | _(same-origin)_ | set to the public URL if the proxy host differs |
 
@@ -84,6 +85,7 @@ Run `opencode serve` under its own unit (or existing session) on the same host.
   # /etc/nginx/sites-available/wikichat — proxy_pass http://127.0.0.1:5174 with:
   # proxy_http_version 1.1; proxy_buffering off; proxy_read_timeout 600s;
   # proxy_send_timeout 600s; X-Forwarded-Proto $scheme
+  # client_max_body_size 25M;   (nginx default ~1MB 413s uploads first!)
   sudo certbot --nginx -d <domain> --redirect
   ```
   Set `ORIGIN=https://<domain>` in the app unit (else SvelteKit rejects

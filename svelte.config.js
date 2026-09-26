@@ -4,8 +4,10 @@ import adapter from '@sveltejs/adapter-node';
 const config = {
 	kit: {
 		adapter: adapter(),
-		// Must exceed the 20MB upload policy in src/lib/uploads.ts (+ multipart overhead).
-		bodySizeLimit: 21 * 1024 * 1024,
+		// NOTE: bodySizeLimit here is NOT honored by @sveltejs/adapter-node 5.x —
+		// the built handler reads BODY_SIZE_LIMIT env (default 512K) instead.
+		// Upload ceiling is enforced via that env var (see DEPLOY.md) plus the
+		// 20MB policy in src/lib/uploads.ts.
 		alias: {
 			$tests: './src/tests'
 		}
