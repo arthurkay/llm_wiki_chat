@@ -78,6 +78,55 @@ describe('POST /api/documents', () => {
 		expect(src.status).toBe('completed');
 		expect(src.stored_name).toContain(body.id);
 	});
+
+	it('accepts raw octet-stream uploads with filename param', async () => {
+		const res = await POST({
+			url: new URL('http://test/api/documents?filename=raw.pdf'),
+			request: new Request('http://test/api/documents?filename=raw.pdf', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: 'pdf-bytes-here'
+			})
+		} as never);
+		expect(res.status).toBe(201);
+		const body = (await res.json()) as { id: string };
+		const src = getDb().prepare('SELECT filename, file_type FROM sources WHERE id = ?').get(body.id) as {
+			filename: string;
+			file_type: string;
+		};
+		expect(src).toMatchObject({ filename: 'raw.pdf', file_type: 'pdf' });
+	});
+
+	it('rejects octet-stream uploads without a filename', async () => {
+		const res = await POST({
+			url: new URL('http://test/api/documents'),
+			request: new Request('http://test/api/documents', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: 'data'
+			})
+		} as never);
+		expect(res.status).toBe(400);
+	});
+
+	it('sanitizes traversal filenames from the query param', async () => {
+		const res = await POST({
+			url: new URL('http://test/api/documents?filename=' + encodeURIComponent('../../evil.txt')),
+			request: new Request('http://test/api/documents?filename=' + encodeURIComponent('../../evil.txt'), {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: 'evil content here'
+			})
+		} as never);
+		expect(res.status).toBe(201);
+		const body = (await res.json()) as { id: string };
+		const src = getDb().prepare('SELECT filename, stored_name FROM sources WHERE id = ?').get(body.id) as {
+			filename: string;
+			stored_name: string;
+		};
+		expect(src.filename).toBe('evil.txt');
+		expect(src.stored_name).not.toContain('..');
+	});
 });
 
 describe('GET /api/documents', () => {
@@ -107,5 +156,21 @@ describe('DELETE /api/documents/:id', () => {
 	it('404s unknown ids', async () => {
 		const res = await deleteSource({ params: { id: 'missing' } } as never);
 		expect(res.status).toBe(404);
+	});
+
+	it('handles multi-MB binary bodies without multipart parsing', async () => {
+		const binary = Buffer.alloc(2 * 1024 * 1024, 0);
+		const res = await POST({
+			url: new URL('http://test/api/documents?filename=big.pdf'),
+			request: new Request('http://test/api/documents?filename=big.pdf', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: binary
+			})
+		} as never);
+		expect(res.status).toBe(201);
+		const body = (await res.json()) as { id: string };
+		const src = getDb().prepare('SELECT file_size FROM sources WHERE id = ?').get(body.id) as { file_size: number };
+		expect(src.file_size).toBe(2 * 1024 * 1024);
 	});
 });

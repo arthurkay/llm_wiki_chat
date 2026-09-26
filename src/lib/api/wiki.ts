@@ -106,9 +106,15 @@ export interface ChatSettingsResponse {
 export const wikiApi = {
 	sources: () => req<WikiSource[]>('/api/documents'),
 	upload: async (file: File) => {
-		const form = new FormData();
-		form.append('file', file);
-		return req<{ id: string; job_id: string }>('/api/documents', { method: 'POST', body: form });
+		// Raw octet-stream with ?filename= : immune to multipart parser limits.
+		const res = await fetch(`/api/documents?filename=${encodeURIComponent(file.name)}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/octet-stream' },
+			body: file
+		});
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) throw new Error((data as { error?: string }).error || 'Upload failed');
+		return data as { id: string; job_id: string };
 	},
 	jobs: () => req<IngestJobRow[]>('/api/jobs'),
 	runJobs: () => req<{ started: boolean }>('/api/jobs/run', { method: 'POST' }),

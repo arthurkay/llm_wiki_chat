@@ -12,30 +12,42 @@ export const GET: RequestHandler = async () => {
 	return json(rows);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
-	let form: FormData;
-	try {
-		form = await request.formData();
-	} catch {
-		return json({ error: 'upload arrived empty or interrupted — please retry (on mobile, download cloud files to the device first)' }, { status: 400 });
+export const POST: RequestHandler = async ({ request, url }) => {
+	// Preferred path: raw octet-stream with ?filename= (immune to multipart
+	// parser limits on binary bodies). Multipart form is kept as fallback.
+	const contentType = request.headers.get('content-type') ?? '';
+	let rawName: string;
+	let buf: Buffer;
+	if (contentType.startsWith('application/octet-stream')) {
+		rawName = url.searchParams.get('filename') ?? '';
+		if (!rawName) return json({ error: 'filename query parameter required' }, { status: 400 });
+		buf = Buffer.from(await request.arrayBuffer());
+	} else {
+		let form: FormData;
+		try {
+			form = await request.formData();
+		} catch {
+			return json({ error: 'upload arrived empty or interrupted — please retry (on mobile, download cloud files to the device first)' }, { status: 400 });
+		}
+		const file = form.get('file');
+		if (!(file instanceof File)) return json({ error: 'file field required' }, { status: 400 });
+		rawName = file.name;
+		buf = Buffer.from(await file.arrayBuffer());
 	}
-	const file = form.get('file');
-	if (!(file instanceof File)) return json({ error: 'file field required' }, { status: 400 });
 
-	const validation = validateUploadFile(file.name, file.size);
+	const validation = validateUploadFile(rawName, buf.length);
 	if (!validation.ok) return json({ error: validation.error }, { status: 400 });
 	const ext = validation.ext;
 
-	const buf = Buffer.from(await file.arrayBuffer());
 	const id = randomUUID();
-	const safeName = basename(file.name).replace(/[^a-zA-Z0-9._-]/g, '_');
+	const safeName = basename(rawName).replace(/[^a-zA-Z0-9._-]/g, '_');
 	const storedName = `${id}-${safeName}`;
 	writeFileSync(join(RAW_DIR, storedName), buf);
 
 	const db = getDb();
 	db.prepare(
 		'INSERT INTO sources (id, filename, stored_name, file_type, file_size, sha256, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
-	).run(id, file.name, storedName, ext.slice(1), file.size, sha256(buf), 'queued');
+	).run(id, basename(rawName), storedName, ext.slice(1), buf.length, sha256(buf), 'queued');
 	const jobId = randomUUID();
 	db.prepare('INSERT INTO ingest_jobs (id, source_id, status) VALUES (?, ?, ?)').run(jobId, id, 'queued');
 

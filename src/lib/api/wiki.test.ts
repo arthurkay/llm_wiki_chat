@@ -25,15 +25,16 @@ describe('wikiApi client', () => {
 		await expect(wikiApi.pages()).rejects.toThrow('expired');
 	});
 
-	it('uploads files as multipart form data', async () => {
+	it('uploads files as octet-stream with filename param', async () => {
 		const fetchMock = vi.fn(async () => jsonResponse({ id: '1', job_id: 'j' }));
 		vi.stubGlobal('fetch', fetchMock);
 		const file = new File(['x'], 'a.txt', { type: 'text/plain' });
 		await expect(wikiApi.upload(file)).resolves.toEqual({ id: '1', job_id: 'j' });
 		const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-		expect(url).toBe('/api/documents');
+		expect(url).toBe('/api/documents?filename=a.txt');
 		expect(init.method).toBe('POST');
-		expect(init.body).toBeInstanceOf(FormData);
+		expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/octet-stream');
+		expect(init.body).toBe(file);
 	});
 
 	it('surfaces upload failures', async () => {
