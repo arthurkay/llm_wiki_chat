@@ -10,7 +10,28 @@
 	let messages = $state<{ role: string; content: string; citations?: string[]; thinking?: string; thinkingOpen?: boolean }[]>([]);
 	let sending = $state(false);
 	let sessionError = $state<string | null>(null);
+	let sessionId = $state<string | null>(null);
 	let chatContainer: HTMLDivElement;
+	// Stick to the bottom on new content — unless the user scrolled up.
+	let stickToBottom = $state(true);
+	const STICK_THRESHOLD_PX = 80;
+
+	function scrollToBottom() {
+		if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+	}
+
+	function onScroll() {
+		if (!chatContainer) return;
+		const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+		stickToBottom = scrollHeight - scrollTop - clientHeight < STICK_THRESHOLD_PX;
+	}
+
+	function send(text: string) {
+		stickToBottom = true;
+		wikiChat.send(text);
+		// Show the outgoing message immediately, even before the store updates
+		requestAnimationFrame(scrollToBottom);
+	}
 
 	onMount(() => {
 		wikiChat.restore();
@@ -21,17 +42,30 @@
 			messages = s.messages;
 			sending = s.sending;
 			sessionError = s.error;
+			if (s.sessionId !== sessionId) {
+				// Newly opened chat: start pinned to the bottom
+				sessionId = s.sessionId;
+				stickToBottom = true;
+			}
 		});
 		return unsub;
 	});
 
+	// Follow new messages and streaming tokens while stuck to the bottom.
+	// Reads messages/sending so the effect re-runs on every update.
 	$effect(() => {
-		if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+		void messages.length;
+		void sending;
+		for (const m of messages) {
+			void m.content.length;
+			void (m.thinking?.length ?? 0);
+		}
+		if (stickToBottom) scrollToBottom();
 	});
 </script>
 
 <div class="flex h-full flex-col">
-	<div bind:this={chatContainer} class="flex-1 space-y-4 overflow-x-clip overflow-y-auto p-4">
+	<div bind:this={chatContainer} onscroll={onScroll} class="flex-1 space-y-4 overflow-x-clip overflow-y-auto p-4">
 		{#if messages.length === 0}
 			<div class="flex h-full flex-col items-center justify-center text-center">
 				<span class="bg-muted mb-4 flex size-12 items-center justify-center rounded-lg">
@@ -98,6 +132,6 @@
 	</div>
 
 	<div class="p-4 pt-0">
-		<Composer sending={sending} onSend={(m) => wikiChat.send(m)} onStop={() => wikiChat.stop()} />
+		<Composer sending={sending} onSend={send} onStop={() => wikiChat.stop()} />
 	</div>
 </div>
