@@ -34,6 +34,15 @@ describe('POST /api/documents', () => {
 	it('rejects missing files', async () => {
 		const res = await POST({ request: new Request('http://test/api/documents', { method: 'POST' }) } as never);
 		expect(res.status).toBe(400);
+		expect(await res.json()).toMatchObject({ error: expect.stringMatching(/empty or interrupted/i) });
+	});
+
+	it('rejects empty files with a device-actionable message', async () => {
+		const form = new FormData();
+		form.append('file', new File([], 'empty.pdf', { type: 'application/pdf' }));
+		const res = await POST({ request: new Request('http://test/api/documents', { method: 'POST', body: form }) } as never);
+		expect(res.status).toBe(400);
+		expect(await res.json()).toMatchObject({ error: expect.stringMatching(/empty|download it to the device/i) });
 	});
 
 	it('rejects unsupported extensions', async () => {

@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		form = await request.formData();
 	} catch {
-		return json({ error: 'multipart form with a file field required' }, { status: 400 });
+		return json({ error: 'upload arrived empty or interrupted — please retry (on mobile, download cloud files to the device first)' }, { status: 400 });
 	}
 	const file = form.get('file');
 	if (!(file instanceof File)) return json({ error: 'file field required' }, { status: 400 });

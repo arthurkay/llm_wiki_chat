@@ -18,6 +18,9 @@ export function validateUploadFile(filename: string, sizeBytes: number): UploadV
 	if (!(ALLOWED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
 		return { ok: false, error: 'only PDF, Markdown and text files are supported (.pdf, .md, .markdown, .txt, .text)' };
 	}
+	if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+		return { ok: false, error: 'this file looks empty (0 bytes) — if it lives in cloud storage, download it to the device first, then retry' };
+	}
 	if (sizeBytes > MAX_UPLOAD_BYTES) {
 		return { ok: false, error: `file too large (${formatBytes(sizeBytes)} > 20MB max)` };
 	}

@@ -47,6 +47,14 @@ describe('validateUploadFile', () => {
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.error).toMatch(/20MB max/);
 	});
+
+	it('rejects empty or unreadable files', () => {
+		for (const size of [0, -1, Number.NaN]) {
+			const r = validateUploadFile('a.pdf', size);
+			expect(r.ok).toBe(false);
+			if (!r.ok) expect(r.error).toMatch(/empty|download it to the device/i);
+		}
+	});
 });
 
 describe('formatBytes', () => {
