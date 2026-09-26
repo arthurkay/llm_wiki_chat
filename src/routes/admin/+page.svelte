@@ -207,6 +207,22 @@
 		}
 	}
 
+	async function retryJob(jobId?: string) {
+		try {
+			const result = await wikiApi.retryJobs(jobId);
+			if (result.retried.length === 0) {
+				toasts.message('Nothing to retry');
+			} else {
+				toasts.success(`Requeued ${result.retried.length} failed job(s)`);
+			}
+			await refresh();
+		} catch (e) {
+			fail(e, 'retry failed');
+		}
+	}
+
+	const failedJobs = $derived(jobs.filter((j) => j.status === 'failed'));
+
 	function viewerSources(): string[] {
 		try {
 			const v = JSON.parse(viewing?.sources ?? '[]') as unknown;
@@ -389,13 +405,26 @@
 					{/if}
 				</ul>
 
-				<h3 class="text-sm font-medium">Jobs</h3>
+				<div class="flex items-center justify-between gap-2">
+					<h3 class="text-sm font-medium">Jobs</h3>
+					{#if failedJobs.length > 0}
+						<Button variant="ghost" size="sm" onclick={() => retryJob()} class="h-7 gap-1 text-xs">
+							<RefreshCw class="size-3.5" />
+							Retry all failed ({failedJobs.length})
+						</Button>
+					{/if}
+				</div>
 				<ul class="space-y-2 text-sm">
 					{#each jobs.slice(0, 10) as j}
 						<li class="min-w-0">
 							<div class="flex items-center justify-between gap-2">
 								<span class="min-w-0 flex-1 truncate">{j.filename}</span>
 								<Badge variant={j.status === 'failed' ? 'destructive' : 'outline'} class="shrink-0">{j.status}</Badge>
+								{#if j.status === 'failed'}
+									<Button variant="ghost" size="icon" class="size-7 shrink-0" onclick={() => retryJob(j.id)} aria-label={`Retry ${j.filename}`}>
+										<RefreshCw class="size-3.5" />
+									</Button>
+								{/if}
 							</div>
 							{#if j.status === 'failed' && j.error}
 								<p class="text-muted-foreground mt-0.5 text-xs break-words">Reason: {j.error}</p>

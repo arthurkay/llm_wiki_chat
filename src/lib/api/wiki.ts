@@ -112,6 +112,12 @@ export const wikiApi = {
 	},
 	jobs: () => req<IngestJobRow[]>('/api/jobs'),
 	runJobs: () => req<{ started: boolean }>('/api/jobs/run', { method: 'POST' }),
+	retryJobs: (jobId?: string) =>
+		req<{ retried: string[] }>('/api/jobs/retry', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(jobId ? { job_id: jobId } : {})
+		}),
 	pages: () => req<WikiPageMeta[]>('/api/wiki/pages'),
 	search: (q: string) => req<Array<{ path: string; title: string; body: string }>>(`/api/wiki/search?q=${encodeURIComponent(q)}`),
 	chat: (message: string, sessionId?: string, signal?: AbortSignal) =>

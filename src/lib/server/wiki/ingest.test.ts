@@ -14,7 +14,8 @@ import {
 	removeWikiPage,
 	removeSource,
 	processPendingJobs,
-	isRunAborted
+	isRunAborted,
+	requeueFailedJobs
 } from '$lib/server/wiki/ingest.js';
 
 useTempWiki();
@@ -149,5 +150,19 @@ describe('ingest worker', () => {
 		expect(isRunAborted(db, 's1', 'j2')).toBe(true); // wrong status
 		expect(isRunAborted(db, 'missing', 'j1')).toBe(true); // source gone
 		expect(isRunAborted(db, 's1', 'missing')).toBe(true); // job gone
+	});
+
+	it('requeues failed jobs and resets their sources', () => {
+		const db = getDb();
+		db.prepare("INSERT INTO sources (id, filename, file_type, sha256, status) VALUES ('s1','a.txt','txt','x','failed')").run();
+		db.prepare("INSERT INTO ingest_jobs (id, source_id, status, error) VALUES ('j1','s1','failed','opencode: boom')").run();
+		db.prepare("INSERT INTO sources (id, filename, file_type, sha256, status) VALUES ('s2','b.txt','txt','x','failed')").run();
+		db.prepare("INSERT INTO ingest_jobs (id, source_id, status, error) VALUES ('j2','s2','failed','opencode: boom')").run();
+		expect(requeueFailedJobs('j1')).toEqual(['j1']);
+		expect(db.prepare("SELECT status, error FROM ingest_jobs WHERE id='j1'").get()).toMatchObject({ status: 'queued', error: null });
+		expect(db.prepare("SELECT status FROM sources WHERE id='s1'").get()).toMatchObject({ status: 'queued' });
+		expect(requeueFailedJobs()).toEqual(['j2']);
+		expect(() => requeueFailedJobs('missing')).toThrow(/not found/);
+		expect(() => requeueFailedJobs('j1')).toThrow(/only failed jobs/);
 	});
 });

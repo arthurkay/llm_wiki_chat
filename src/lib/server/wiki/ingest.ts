@@ -247,6 +247,36 @@ async function processJob(jobId: string): Promise<void> {
 
 let running = false;
 
+/**
+ * Requeue failed jobs (e.g. transient opencode failures) so the worker picks
+ * them up again. Pass a job id for one job, or nothing for all failed jobs.
+ * Returns the requeued job ids. Pure db operation — the caller triggers the worker.
+ */
+export function requeueFailedJobs(jobId?: string): string[] {
+	const db = getDb();
+	if (jobId) {
+		const job = db.prepare('SELECT id, source_id, status FROM ingest_jobs WHERE id = ?').get(jobId) as {
+			id: string;
+			source_id: string;
+			status: string;
+		} | undefined;
+		if (!job) throw new Error('job not found');
+		if (job.status !== 'failed') throw new Error(`job is ${job.status}, only failed jobs can be retried`);
+		db.prepare("UPDATE ingest_jobs SET status='queued', error=NULL, updated_at=datetime('now') WHERE id=?").run(jobId);
+		db.prepare("UPDATE sources SET status='queued' WHERE id=?").run(job.source_id);
+		return [jobId];
+	}
+	const failed = db.prepare("SELECT id, source_id FROM ingest_jobs WHERE status='failed'").all() as Array<{
+		id: string;
+		source_id: string;
+	}>;
+	for (const job of failed) {
+		db.prepare("UPDATE ingest_jobs SET status='queued', error=NULL, updated_at=datetime('now') WHERE id=?").run(job.id);
+		db.prepare("UPDATE sources SET status='queued' WHERE id=?").run(job.source_id);
+	}
+	return failed.map((j) => j.id);
+}
+
 export async function processPendingJobs(): Promise<void> {
 	if (running) return;
 	running = true;
