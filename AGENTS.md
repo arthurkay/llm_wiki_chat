@@ -1,5 +1,22 @@
 # AGENTS.md — llm_wiki_chat
 
+> This repo is a real-world implementation of **Andrej Karpathy's llm_wiki
+> pattern**: instead of re-deriving answers from raw chunks on every query
+> (RAG), an LLM **compiles sources once** into a persistent, interlinked wiki
+> and keeps it current. The mapping is exact:
+>
+> | Karpathy layer | Here |
+> |---|---|
+> | Raw sources (immutable, LLM reads only) | `data/raw/` |
+> | Wiki (LLM-owned Markdown: summaries, entities, concepts, `index.md`, `log.md`, `[[wikilinks]]`) | `data/wiki/` |
+> | Schema (rules + workflows co-evolved with the LLM) | `data/schema.md` |
+>
+> | Karpathy operation | Here |
+> |---|---|
+> | Ingest (read source → write/refresh pages → update index + log) | worker in `src/lib/server/wiki/ingest.ts` via `opencode serve` |
+> | Query (search wiki → read pages → synthesize with citations) | `src/lib/server/wiki/query.ts` (FTS5 BM25 + one-hop link expansion) + `/api/chat/stream` |
+> | Lint (broken links, orphans, contradictions reported, never silently rewritten) | convention enforced in `data/schema.md` |
+
 ## 1. What this software is
 
 A multi-user, local-first **llm_wiki** knowledge base with chat — not RAG.

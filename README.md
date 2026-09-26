@@ -1,9 +1,11 @@
 # Wiki Chat
 
-Shared llm_wiki knowledge base with multi-user chat. One admin curates sources
-(PDF, Markdown, text) from any device on the LAN; a worker compiles them into a
-persistent Markdown wiki via an `opencode serve` backend; everyone chats against
-it with streaming answers, citations and reasoning.
+A real-world implementation of **Andrej Karpathy's llm_wiki pattern**: a shared,
+persistent knowledge base with multi-user chat. One admin curates sources
+(PDF, Markdown, text) from any device on the LAN; a worker compiles them once
+into an interlinked Markdown wiki via an `opencode serve` backend (never
+re-derived per query); everyone chats against it with streaming answers,
+citations and reasoning.
 
 ## Run
 

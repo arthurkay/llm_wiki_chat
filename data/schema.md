@@ -1,4 +1,9 @@
-# Wiki schema — co-evolved with the LLM maintainer (llm_wiki pattern)
+# Wiki schema — co-evolved with the LLM maintainer
+
+> This vault implements **Andrej Karpathy's llm_wiki pattern**: raw sources are
+> compiled once into this persistent, interlinked wiki (not re-derived per query),
+> and this schema is the rules document the pattern calls for — maintained jointly
+> by human and LLM as the domain understanding grows.
 
 Three layers:
 - `data/raw/` — immutable sources (you write, LLM only reads). pdf/txt/md.
