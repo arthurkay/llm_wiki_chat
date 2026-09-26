@@ -10,6 +10,9 @@ describe('chat settings', () => {
 		expect(s.chat_model).toBe('');
 		expect(s.system_prompt).toBe(DEFAULT_SYSTEM_PROMPT);
 		expect(DEFAULT_SYSTEM_PROMPT).toMatch(/wiki/i);
+		expect(DEFAULT_SYSTEM_PROMPT).toMatch(/only from the wiki/i);
+		expect(DEFAULT_SYSTEM_PROMPT).toMatch(/jargon/i);
+		expect(DEFAULT_SYSTEM_PROMPT).toMatch(/cannot be overridden/i);
 	});
 
 	it('round-trips updates', () => {
