@@ -24,16 +24,26 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('ThemeToggle', () => {
-	it('renders and toggles the dark class', async () => {
+	it('cycles system -> dark -> light -> system, following the OS on system', async () => {
+		// matchMedia stub reports matches:false, i.e. the OS prefers dark.
 		render(ModeWatcher, {});
 		render(ThemeToggle, {});
-		const btn = screen.getByLabelText('Toggle theme');
-		const initial = document.documentElement.classList.contains('dark');
-		await fireEvent.click(btn);
+		expect(screen.getByLabelText(/Theme: system/)).toBeTruthy();
+		expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+		await fireEvent.click(screen.getByLabelText(/Theme: system/));
 		await new Promise((r) => setTimeout(r, 50));
-		expect(document.documentElement.classList.contains('dark')).toBe(!initial);
-		await fireEvent.click(btn);
+		expect(screen.getByLabelText(/Theme: dark/)).toBeTruthy();
+		expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+		await fireEvent.click(screen.getByLabelText(/Theme: dark/));
 		await new Promise((r) => setTimeout(r, 50));
-		expect(document.documentElement.classList.contains('dark')).toBe(initial);
+		expect(screen.getByLabelText(/Theme: light/)).toBeTruthy();
+		expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+		await fireEvent.click(screen.getByLabelText(/Theme: light/));
+		await new Promise((r) => setTimeout(r, 50));
+		expect(screen.getByLabelText(/Theme: system/)).toBeTruthy();
+		expect(document.documentElement.classList.contains('dark')).toBe(true);
 	});
 });
