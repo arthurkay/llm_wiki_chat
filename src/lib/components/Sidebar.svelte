@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { MessageSquare, Settings2, BookOpen, SquarePen, MessageCircle } from 'lucide-svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { wikiChat } from '$lib/stores/wikiChat';
 	import type { ChatSession } from '$lib/api/wiki';
 	import { cn } from '$lib/utils.js';
@@ -88,8 +87,7 @@
 		</div>
 	</div>
 
-	<div class="mt-auto flex items-center justify-between px-1">
+	<div class="mt-auto px-1">
 		<p class="text-muted-foreground text-xs">single-user · local wiki</p>
-		<ThemeToggle />
 	</div>
 </div>

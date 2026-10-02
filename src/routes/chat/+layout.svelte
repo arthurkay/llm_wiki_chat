@@ -26,8 +26,8 @@
 	{/if}
 
 	<div class="flex min-w-0 flex-1 flex-col">
-		<header class="flex items-center gap-2 border-b px-4 py-2 md:hidden">
-			<Button variant="ghost" size="icon" onclick={() => (open = true)} aria-label="Open menu">
+		<header class="flex items-center gap-2 border-b px-4 py-2">
+			<Button variant="ghost" size="icon" onclick={() => (open = true)} aria-label="Open menu" class="md:hidden">
 				<Menu class="size-4" />
 			</Button>
 			<span class="text-sm font-semibold">Wiki Chat</span>

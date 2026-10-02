@@ -65,7 +65,7 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<div bind:this={chatContainer} onscroll={onScroll} class="flex-1 space-y-4 overflow-x-clip overflow-y-auto p-4">
+	<div bind:this={chatContainer} onscroll={onScroll} class="flex-1 space-y-4 overflow-x-clip overflow-y-auto p-4 md:px-6 md:pt-8">
 		{#if messages.length === 0}
 			<div class="flex h-full flex-col items-center justify-center text-center">
 				<span class="bg-muted mb-4 flex size-12 items-center justify-center rounded-lg">
